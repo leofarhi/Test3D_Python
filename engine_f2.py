@@ -18,6 +18,9 @@ MAX_VALUE = 360
 cos_lst = []
 sin_lst = []
 
+def clamp(value, min_value, max_value):
+    return max(min(value, max_value), min_value)
+
 def lerp(a, b, t):
     return a + (b - a) * t
 
@@ -74,10 +77,20 @@ def draw_texture_tri(src, dest, texture):
     area = (dest_x1 - dest_x0) * (dest_y2 - dest_y0) - (dest_x2 - dest_x0) * (dest_y1 - dest_y0)
     
     # Loop through the bounding box of the triangle
-    for y in range(min(dest_y0, dest_y1, dest_y2), max(dest_y0, dest_y1, dest_y2)):
-        for x in range(min(dest_x0, dest_x1, dest_x2), max(dest_x0, dest_x1, dest_x2)):
+    mini1 = min(dest_y0, dest_y1, dest_y2)
+    mini2 = min(dest_x0, dest_x1, dest_x2)
+    maxi1 = max(dest_y0, dest_y1, dest_y2)
+    maxi2 = max(dest_x0, dest_x1, dest_x2)
+    #TODO: Fix the clipping
+    mini1 = clamp(mini1, 0, HEIGHT)
+    mini2 = clamp(mini2, 0, WIDTH)
+    maxi1 = clamp(maxi1, 0, HEIGHT)
+    maxi2 = clamp(maxi2, 0, WIDTH)
+    ############
+    for y in range(mini1, maxi1):
+        for x in range(mini2, maxi2):
             # Calculate the barycentric coordinates
-            if area == 0:
+            if area == 0 or x < 0 or y < 0 or x >= WIDTH or y >= HEIGHT:
                 continue
             w0 = ((dest_x1 - dest_x0) * (y - dest_y0) - (dest_y1 - dest_y0) * (x - dest_x0)) / area
             w1 = ((dest_x2 - dest_x1) * (y - dest_y1) - (dest_y2 - dest_y1) * (x - dest_x1)) / area
@@ -94,6 +107,7 @@ def draw_texture_tri(src, dest, texture):
                 # Get the color from the texture and draw it on the screen
                 color = data_array[u, v]
                 surface.set_at((x, y), color)
+
 
 def draw_texture_quad(src, dest, texture):
     # Extract source and destination points
@@ -127,6 +141,7 @@ class Cube:
 
     def get_transformed_points(self, camera):
         transformed_points = []
+        depths_points = []
         for p in self.points:
             m = matrix([[p[0]], [p[1]], [p[2]], [1]])
             for method, angle in zip((generate_x, generate_y, generate_z), self.rotation):
@@ -137,37 +152,109 @@ class Cube:
                 m = method(angle) * m[:3, :]
             x, y, z = m[:3, 0]
             if z > 0:  # Perspective projection
-                f = 200 / z
+                f = 300 / z
                 x, y = int(x * f + WIDTH / 2), int(-y * f + HEIGHT / 2)
                 transformed_points.append((x, y))
-        return transformed_points
+                depths_points.append(z)
+            else:
+                transformed_points.append((0, 0))
+                depths_points.append(0)
+        return transformed_points, depths_points
     
     def render(self, camera):
-        render_points = self.get_transformed_points(camera)
-        for p1 in range(len(render_points) - 1):
-            for p2 in render_points[p1 + 1:]:
-                pygame.draw.line(surface, WHITE, render_points[p1], p2)
-        for p in render_points:
-            pygame.draw.circle(surface, (255, 0, 0), p, 3)
-        self.render_texture(camera, render_points)
+        render_points, depths_points = self.get_transformed_points(camera)
+        self.render_texture(camera, render_points, depths_points)
 
-    def render_texture(self, camera, render_points):
+    def render_texture(self, camera, render_points, dps):
+        faces = [
+            (render_points[1], render_points[0], render_points[3], render_points[2]),#Back face
+            (render_points[4], render_points[5], render_points[6], render_points[7]),#Front face
+            (render_points[0], render_points[1], render_points[5], render_points[4]),#Top face
+            (render_points[2], render_points[3], render_points[7], render_points[6]),#Bottom face
+            (render_points[0], render_points[4], render_points[7], render_points[3]),#Left face
+            (render_points[5], render_points[1], render_points[2], render_points[6])#Right face
+        ]
+        depths = [
+            sum(dps[0:4]) / 4,#Back face
+            sum(dps[4:8]) / 4,#Front face
+            sum([dps[1], dps[0], dps[3], dps[2]]) / 4,#Top face
+            sum([dps[2], dps[3], dps[7], dps[6]]) / 4,#Bottom face
+            sum([dps[0], dps[4], dps[7], dps[3]]) / 4,#Left face
+            sum([dps[5], dps[1], dps[2], dps[6]]) / 4#Right face
+        ]
+        points = [
+            [self.points[1], self.points[0], self.points[3], self.points[2]],#Back face
+            [self.points[4], self.points[5], self.points[6], self.points[7]],#Front face
+            [self.points[0], self.points[1], self.points[5], self.points[4]],#Top face
+            [self.points[2], self.points[3], self.points[7], self.points[6]],#Bottom face
+            [self.points[0], self.points[4], self.points[7], self.points[3]],#Left face
+            [self.points[5], self.points[1], self.points[2], self.points[6]]#Right face
+        ]
+        #Cull back faces
+        CulledFaces = []
+        for i, point in enumerate(points):
+            face = faces[i]
+            # Calculate vectors
+            v1 = [point[1][j] - point[0][j] for j in range(3)]
+            v2 = [point[2][j] - point[0][j] for j in range(3)]
+            
+            # Cross product to get the normal
+            normal = [
+                v1[1] * v2[2] - v1[2] * v2[1],
+                v1[2] * v2[0] - v1[0] * v2[2],
+                v1[0] * v2[1] - v1[1] * v2[0]
+            ]
+            
+            # Vector from camera to face
+            view_vector = [point[0][j] - camera.position[j] for j in range(3)]
+            
+            # Dot product to determine if the face is visible
+            dot_product = sum(normal[j] * view_vector[j] for j in range(3))
+            
+            if dot_product < 0:
+                CulledFaces.append((depths[i], face))
+
+        # Sort faces by depth
+        CulledFaces.sort(reverse=True, key=lambda x: x[0])
+
+        #Send the faces to the QuadDrawer
         w, h = self.texture.get_size()
-        src_coords = [(0, 0), (w, 0), (w, h), (0, h)]
-        face1 = [render_points[0], render_points[1], render_points[2], render_points[3]]
-        draw_texture_quad(src_coords, face1, self.texture)
-        face2 = [render_points[0], render_points[1], render_points[5], render_points[4]]
-        draw_texture_quad(src_coords, face2, self.texture)
-        face3 = [render_points[2], render_points[3], render_points[7], render_points[6]]
-        draw_texture_quad(src_coords, face3, self.texture)
-        face4 = [render_points[4], render_points[0], render_points[3], render_points[7]]
-        draw_texture_quad(src_coords, face4, self.texture)
-        face5 = [render_points[5], render_points[1], render_points[2], render_points[6]]
-        draw_texture_quad(src_coords, face5, self.texture)
-        face6 = [render_points[4], render_points[5], render_points[6], render_points[7]]
-        draw_texture_quad(src_coords, face6, self.texture)
+        src_coords = [(0, 0), (w-1, 0), (w-1, h-1), (0, h-1)]
+        for depth, face in CulledFaces:
+            QuadDrawerAppend(src_coords, face, self.texture, depth)
 
-        
+def QuadDrawerAppend(src, dest, texture, depth):
+    top_left, top_right, bottom_right, bottom_left = src
+    top_left_dest, top_right_dest, bottom_right_dest, bottom_left_dest = dest
+
+    src = (top_left, bottom_right, bottom_left)
+    dest = (top_left_dest, bottom_right_dest, bottom_left_dest)
+    TriangleDrawer.Buffer.append(TriangleDrawer(texture, src, dest, depth))
+    src = (top_left, top_right, bottom_right)
+    dest = (top_left_dest, top_right_dest, bottom_right_dest)
+    TriangleDrawer.Buffer.append(TriangleDrawer(texture, src, dest, depth))
+
+class TriangleDrawer:
+    Buffer = []
+    def __init__(self, texture, src, dest, depth):
+        self.texture = texture
+        self.src = src
+        self.dest = dest
+        self.depth = depth
+    
+    @staticmethod
+    def SortBuffer():
+        TriangleDrawer.Buffer.sort(key=lambda td: td.depth, reverse=True)
+
+    @staticmethod
+    def DrawBuffer():
+        for tri in TriangleDrawer.Buffer:
+            draw_texture_tri(tri.src, tri.dest, tri.texture)
+
+    @staticmethod
+    def ClearBuffer():
+        TriangleDrawer.Buffer = []
+
 
 class Camera:
     def __init__(self, position):
@@ -185,8 +272,12 @@ class Camera:
         self.position[axis] += distance
 
     def render(self):
+        TriangleDrawer.ClearBuffer()
         for cube in self.cubes:
             cube.render(self)
+        TriangleDrawer.SortBuffer()
+        TriangleDrawer.DrawBuffer()
+    
     def inputs(self, keys):
         if keys[pygame.K_a]:
             self.rotate(1, pi / 180)
@@ -201,51 +292,28 @@ class Camera:
         if keys[pygame.K_e]:
             self.rotate(2, -pi / 180)
         self.inputs_local(keys)
-        #self.inputs_global(keys)
         if keys[pygame.K_PAGEUP]:
             self.move(1, 10)
         if keys[pygame.K_PAGEDOWN]:
             self.move(1, -10)
 
-
     def inputs_local(self, keys):
-        #change movement is adapted with rotation
         if keys[pygame.K_LEFT]:
-            #move forward in the direction of the camera
             self.position[0] += cos(self.rotation[1]) * 10
             self.position[2] += sin(self.rotation[1]) * 10
         if keys[pygame.K_RIGHT]:
-            #move backward in the opposite direction of the camera
             self.position[0] -= cos(self.rotation[1]) * 10
             self.position[2] -= sin(self.rotation[1]) * 10
         if keys[pygame.K_DOWN]:
-            #move left in the direction of the camera
             self.position[0] -= sin(self.rotation[1]) * 10
             self.position[2] += cos(self.rotation[1]) * 10
         if keys[pygame.K_UP]:
-            #move right in the direction of the camera
             self.position[0] += sin(self.rotation[1]) * 10
             self.position[2] -= cos(self.rotation[1]) * 10
 
-    def inputs_global(self, keys):
-        if keys[pygame.K_UP]:
-            self.move(2, 10)
-        if keys[pygame.K_DOWN]:
-            self.move(2, -10)
-        if keys[pygame.K_LEFT]:
-            self.move(0, -10)
-        if keys[pygame.K_RIGHT]:
-            self.move(0, 10)
-
-# Create a camera and add cubes to it
 camera = Camera([0, 0, -500])
 camera.add_cube(Cube([0, 0, 100], 50))
 camera.add_cube(Cube([0, 0, 200], 50))
-#camera.add_cube(Cube([100, 100, 200], 30))
-#camera.add_cube(Cube([-100, -100, 300], 40))
-#camera.add_cube(Cube([-100, -180, 300], 40))
-#for i in range(1, 10):
-#    camera.add_cube(Cube([i*100, 0, 300], 40))
 
 while not done:
     for e in pygame.event.get():
@@ -254,12 +322,17 @@ while not done:
             break
 
     keys = pygame.key.get_pressed()
-    
+    if keys[pygame.K_o]:
+        camera.cubes[0].rotate(1, pi / 180)
+    if keys[pygame.K_p]:
+        camera.cubes[0].rotate(1, -pi / 180)
+    if keys[pygame.K_l]:
+        camera.cubes[0].rotate(0, pi / 180)
+    if keys[pygame.K_m]:
+        camera.cubes[0].rotate(0, -pi / 180)
     camera.inputs(keys)
 
     pygame.draw.rect(surface, (0, 0, 0), pygame.Rect(0, 0, WIDTH, HEIGHT))
-
     camera.render()
-
     display.flip()
     clock.tick(60)

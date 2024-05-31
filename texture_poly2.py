@@ -7,7 +7,7 @@ import pygame
 def draw_texture_tri(src, dest, texture):
     # Extract source and destination points
     (src_x0, src_y0), (src_x1, src_y1), (src_x2, src_y2) = src
-    (dest_x0, dest_y0), (dest_x1, dest_y1), (dest_x2, dest_y2) = dest
+    (dest_x2, dest_y2), (dest_x0, dest_y0), (dest_x1, dest_y1),  = dest
     
     # Get the texture size
     tex_w, tex_h = texture.get_size()
@@ -22,6 +22,8 @@ def draw_texture_tri(src, dest, texture):
     for y in range(min(dest_y0, dest_y1, dest_y2), max(dest_y0, dest_y1, dest_y2)):
         for x in range(min(dest_x0, dest_x1, dest_x2), max(dest_x0, dest_x1, dest_x2)):
             # Calculate the barycentric coordinates
+            if area == 0:
+                continue
             w0 = ((dest_x1 - dest_x0) * (y - dest_y0) - (dest_y1 - dest_y0) * (x - dest_x0)) / area
             w1 = ((dest_x2 - dest_x1) * (y - dest_y1) - (dest_y2 - dest_y1) * (x - dest_x1)) / area
             w2 = 1 - w0 - w1
@@ -38,7 +40,14 @@ def draw_texture_tri(src, dest, texture):
                 color = data_array[u, v]
                 surface.set_at((x, y), color)
 
+def draw_texture_quad(src, dest, texture):
+    # Extract source and destination points
+    top_left, top_right, bottom_right, bottom_left = src
+    top_left_dest, top_right_dest, bottom_right_dest, bottom_left_dest = dest
     
+    # Draw the two triangles that form the quad
+    draw_texture_tri((top_left, bottom_right, bottom_left), (top_left_dest, bottom_right_dest, bottom_left_dest), texture)
+    draw_texture_tri((top_left, top_right, bottom_right), (top_left_dest, top_right_dest, bottom_right_dest), texture)
 
 # Initialize Pygame and create the surface
 pygame.init()
@@ -46,25 +55,12 @@ surface = pygame.display.set_mode((500, 500))
 pygame.display.set_caption("Texture Triangle")
 
 # Load a texture (example: a 100x100 pixel image)
-texture = pygame.image.load('texture.jpg').convert()
+texture = pygame.image.load('texture2.jpg').convert()
 
-# Define source texture coordinates (u, v)
-src_coords = [(0, 0), ((texture.get_width() - 1), 0), (0, (texture.get_height() - 1))]
+src = [(0, 0), (texture.get_width() - 1, 0), (texture.get_width() - 1, texture.get_height() - 1), (0, texture.get_height() - 1)]
+dest = [(100, 100), (300, 100), (300, 300), (100, 300)]
+draw_texture_quad(src, dest, texture)
 
-# Define destination screen coordinates (x, y)
-#test: dest_coords = [(100, 100), (300, 150), (100, 300)]
-# Draw the textured triangle
-#draw_texture_tri(src_coords, dest_coords, texture)
-
-#square points :
-points1 = [(0, 0), (100, 0), (0, 100)]
-points2 = [(100, 0), (100, 100), (0, 100)]
-#source texture coordinates (u, v)
-w, h = texture.get_size()
-src_coords1 = [(0, 0), (w, 0), (0, h)]
-src_coords2 = [(w, 0), (w, h), (0, h)]
-draw_texture_tri(src_coords1, points1, texture)
-draw_texture_tri(src_coords2, points2, texture)
 
 # Main loop to display the result
 done = False

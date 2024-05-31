@@ -89,8 +89,15 @@ class Cube:
             if z > 0:  # Perspective projection
                 f = 200 / z
                 x, y = int(x * f + WIDTH / 2), int(-y * f + HEIGHT / 2)
+                x = clamp(x, -MAX_INT, MAX_INT)
+                y = clamp(y, -MAX_INT, MAX_INT)
                 transformed_points.append((x, y))
         return transformed_points
+    
+def clamp(value, min_value, max_value):
+    return max(min(value, max_value), min_value)
+
+MAX_INT = 1000000
 
 class Camera:
     def __init__(self, position):
