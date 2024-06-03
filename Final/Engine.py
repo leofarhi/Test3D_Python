@@ -35,7 +35,7 @@ faces = [
     [0, 4, 7, 3],
     [5, 1, 2, 6]
 ]
-texture = pygame.image.load('texture2.jpg').convert()
+texture = pygame.image.load('texture.jpg').convert()
 w, h = texture.get_size()
 uv = [(0, 0), (w-1, 0), (w-1, h-1), (0, h-1)]
 faces = [Face(f,uv,texture) for f in faces]

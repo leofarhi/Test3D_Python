@@ -1,4 +1,5 @@
 import pygame
+clock = pygame.time.Clock()
 
 class Window:
     Instance = None
@@ -20,6 +21,7 @@ class Window:
 
     def Update(self):
         self.display.flip()
+        clock.tick(60)
 
     def Close(self):
         pygame.quit()

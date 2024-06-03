@@ -1,5 +1,11 @@
 import pygame
+import math
 
+WIDTH = 500
+HEIGHT = 500
+
+def clamp(value, min_value, max_value):
+    return max(min(value, max_value), min_value)
 
 #draw_texture_tri(src[3][2],dest[3][2], texture)
 #src : source texture coordinates (u, v)
@@ -17,13 +23,17 @@ def draw_texture_tri(src, dest, texture):
     
     # Calculate the area of the triangle
     area = (dest_x1 - dest_x0) * (dest_y2 - dest_y0) - (dest_x2 - dest_x0) * (dest_y1 - dest_y0)
+    if area == 0:
+        return
     
     # Loop through the bounding box of the triangle
-    for y in range(min(dest_y0, dest_y1, dest_y2), max(dest_y0, dest_y1, dest_y2)):
-        for x in range(min(dest_x0, dest_x1, dest_x2), max(dest_x0, dest_x1, dest_x2)):
+    min_y = clamp(min(dest_y1, dest_y2, dest_y0), 0, HEIGHT)
+    min_x = clamp(min(dest_x1, dest_x2, dest_x0), 0, WIDTH)
+    max_y = clamp(max(dest_y1, dest_y2, dest_y0), 0, HEIGHT)
+    max_x = clamp(max(dest_x1, dest_x2, dest_x0), 0, WIDTH)
+    for y in range(min_y, max_y):
+        for x in range(min_x, max_x):
             # Calculate the barycentric coordinates
-            if area == 0:
-                continue
             w0 = ((dest_x1 - dest_x0) * (y - dest_y0) - (dest_y1 - dest_y0) * (x - dest_x0)) / area
             w1 = ((dest_x2 - dest_x1) * (y - dest_y1) - (dest_y2 - dest_y1) * (x - dest_x1)) / area
             w2 = 1 - w0 - w1
@@ -51,15 +61,14 @@ def draw_texture_quad(src, dest, texture):
 
 # Initialize Pygame and create the surface
 pygame.init()
-surface = pygame.display.set_mode((500, 500))
+surface = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Texture Triangle")
 
 # Load a texture (example: a 100x100 pixel image)
 texture = pygame.image.load('texture2.jpg').convert()
 
 src = [(0, 0), (texture.get_width() - 1, 0), (texture.get_width() - 1, texture.get_height() - 1), (0, texture.get_height() - 1)]
-dest = [(100, 100), (300, 100), (300, 300), (100, 300)]
-draw_texture_quad(src, dest, texture)
+dest = [[100, 100], [300, 100], [300, 300], [100, 300]]
 
 
 # Main loop to display the result
@@ -68,6 +77,17 @@ while not done:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             done = True
+    #clear the screen
+    surface.fill((0, 0, 0))
+
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_DOWN]:
+        dest[2][0] += 50
+        dest[3][0] -= 50
+        dest[2][1] += 50
+        dest[3][1] += 50
+
+    draw_texture_quad(src, dest, texture)
 
     pygame.display.flip()
     

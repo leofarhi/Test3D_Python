@@ -7,6 +7,8 @@ from Camera import *
 
 from numpy import matrix
 
+WHITE = (255, 255, 255)
+
 class Face:
     def __init__(self, indexPoints, uv = None, texture = None):
         self.indexPoints = indexPoints
@@ -17,14 +19,16 @@ class Face:
         self.length = len(indexPoints)
 
     def Render(self, camera, new_points):
+        #self.RenderWireframe(camera, new_points)
+        #return
         if self.texture is None or self.length < 3 or self.length > 4 or self.uv is None:
             return
         self.CalculateDepth(new_points)
         if self.depth < 0:
             return
         self.CalculateNormal(new_points)
-        if self.IsCulled(new_points, camera):
-            return
+        #if self.IsCulled(new_points, camera):
+        #    return
         self.RenderTexture(camera, new_points)
         
     def CalculateNormal(self, new_points):
@@ -58,7 +62,7 @@ class Face:
         for i in range(self.length):
             p0 = new_points[self.indexPoints[i]]
             p1 = new_points[self.indexPoints[(i + 1) % self.length]]
-            draw_line(p0[0], p0[1], p1[0], p1[1], WHITE)
+            pygame.draw.line(Window.Instance.surface, WHITE, (p0[0], p0[1]), (p1[0], p1[1]))
 
 class Mesh:
     def __init__(self, vertices, faces):
@@ -103,6 +107,7 @@ class MeshRenderer(Component):
     def get_transformed_points(self, camera):
         transformed_points = []
         for p in self.mesh.vertices:
+            p = [p[i] * self.transform.scale[i] for i in range(3)]
             m = matrix([[p[0]], [p[1]], [p[2]], [1]])
             for method, angle in zip((generate_x, generate_y, generate_z), self.transform.rotation.tolist()):
                 m = method(angle) * m[:3, :]
@@ -111,10 +116,8 @@ class MeshRenderer(Component):
             for method, angle in zip((generate_x, generate_y, generate_z), camera.transform.rotation.tolist()):
                 m = method(angle) * m[:3, :]
             x, y, z = m[:3, 0]
-            if z > 0:  # Perspective projection
-                f = 300 / z
-                x, y = int(x * f + Window.Instance.width / 2), int(-y * f + Window.Instance.height / 2)
-                transformed_points.append((x, y, z))
-            else:
-                transformed_points.append((0, 0, 0))
+            z = float(z)
+            f = 300 / max(1, z)
+            x, y = int(x * f + Window.Instance.width / 2), int(-y * f + Window.Instance.height / 2)
+            transformed_points.append((x, y, z))
         return transformed_points
