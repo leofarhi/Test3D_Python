@@ -53,6 +53,8 @@ class Face:
     def RenderTexture(self, camera, new_points):
         src_coords = self.uv
         dest_coords = [new_points[i] for i in self.indexPoints]
+        for i in range(self.length):
+            dest_coords[i] = (dest_coords[i][0], dest_coords[i][1], max(1, dest_coords[i][2]))
         if self.length == 3:
             TriangleDrawerAppend(src_coords, dest_coords, self.texture, self.depth)
         else:
@@ -117,8 +119,7 @@ class MeshRenderer(Component):
                 m = method(angle) * m[:3, :]
             x, y, z = m[:3, 0]
             z = float(z)
-            z = max(1, z)
-            f = 300 / z
+            f = 300 / max(1, z)
             x, y = int(x * f + Window.Instance.width / 2), int(-y * f + Window.Instance.height / 2)
             transformed_points.append((x, y, z))
         return transformed_points
